@@ -1,5 +1,5 @@
-# rotor component with parallel-to-disk flow component.
-# Basically a copy of component_analysis.jl, but I added the azimuth discretization.
+# rotor component with non-perpendicular inflow, i.e., considers parallel-to-disk flow component.
+# Basically a copy of component_analysis.jl, but I added the azimuth discretization. I also removed figure_of_merit
 
 # task for 5/11
 # TODO: clean and remove unnecessary comments
@@ -8,7 +8,7 @@
     num_operating_points
     num_blades
     num_radial
-    num_azimuth  # azimuth discretization for parallel-to-disk flow
+    num_azimuth  # azimuth discretization for parallel-to-disk flow component
     rho
     mu
     speedofsound
@@ -33,8 +33,6 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
     end
 
     function apply_nonlinear_forwarddiffable!(y, x)
-        # NOTE: this is called for each operating points / each azimuth angle. Therefore, I should't need to modify the phi shape here.
-        # OR, can I broadcast the entire operation? so that this is called for each operating points. No loop over azimuth.
         T = eltype(x)
 
         # Azimuth discretization
@@ -62,8 +60,6 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
         sections = CCBlade.Section.(radii, chord, theta, Ref(af))
 
         # Create the CCBlade operating points.
-        ### Vx = v
-        ### Vy = omega.*radii
         Vx = v
         Vrot = omega.*radii   # rotational velocity, length=num_radial
         Vs = v_pal * cos.(azangles)   # side flow velocity, length=num_azimuth
@@ -91,44 +87,16 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
         y[:torque] = torque
         y[:eff] = eff
         ### y[:figure_of_merit] = figure_of_merit
-
-        #=
-        # -------------------------
-        # print outputs
-        println("--- in apply_nonlinear_forwarddiffable ---")
-        println("thrust")
-        println(thrust)
-        println("torque")
-        println(torque)
-        println("phi")
-        println(phi)
-        println("efficiency")
-        println(eff)
-        println("FM")
-        println(figure_of_merit)
-        # -------------------------
-        =#
-
         return nothing
     end
 
     # Initialize the input and output vectors needed by ForwardDiff.jl. (The
     # ForwardDiff.jl inputs include phi, but that's an OpenMDAO output.)
-    #=
-    X = ComponentArray(
-        phi=zeros(Float64, num_radial), Rhub=0.0, Rtip=0.0, radii=zeros(Float64, num_radial), chord=zeros(Float64, num_radial),
-        theta=zeros(Float64, num_radial), v=0.0, omega=0.0, pitch=0.0)
-    ### Y = ComponentArray(
-    ###     phi=zeros(Float64, num_radial), thrust=0.0, torque=0.0, eff=0.0, figure_of_merit=0.0)
-    Y = ComponentArray(
-        phi=zeros(Float64, num_radial), thrust=0.0, torque=0.0)
-    =#
-
     X = ComponentArray(
         phi=zeros(Float64, (num_radial, num_azimuth)), Rhub=0.0, Rtip=0.0, radii=zeros(Float64, num_radial), chord=zeros(Float64, num_radial),
         theta=zeros(Float64, num_radial), v=0.0, v_pal=0.0, omega=0.0, pitch=0.0)
     Y = ComponentArray(
-        phi=zeros(Float64, (num_radial, num_azimuth)), thrust=0.0, torque=0.0, eff=0.0)
+        phi=zeros(Float64, (num_radial, num_azimuth)), thrust=0.0, torque=0.0, eff=0.0)   # to compute figure_of_merit, must add it here.
     J = Y.*X'
 
     # Get the JacobianConfig object, which we'll reuse each time when calling
@@ -158,7 +126,6 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
 
     # Declare the OpenMDAO outputs.
     output_data = Vector{VarData}()
-    ### push!(output_data, VarData("phi", shape=(num_operating_points, num_radial), val=1.0, units="rad"))
     push!(output_data, VarData("phi", shape=(num_operating_points, num_radial, num_azimuth), val=1.0, units="rad"))   # [i, j, l]
     push!(output_data, VarData("thrust", shape=num_operating_points, val=1.0, units="N"))
     push!(output_data, VarData("torque", shape=num_operating_points, val=1.0, units="N*m"))
@@ -169,25 +136,21 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     ss_sizes = Dict(:i=>num_operating_points, :j=>num_radial, :k=>1, :l=>num_azimuth)
     partials_data = Vector{PartialsData}()
 
-    ### rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j], wrt_ss=[:k])
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:k])
     push!(partials_data, PartialsData("phi", "Rhub", rows=rows, cols=cols))
     push!(partials_data, PartialsData("phi", "Rtip", rows=rows, cols=cols))
 
-    ### rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j], wrt_ss=[:j])
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:j])
     push!(partials_data, PartialsData("phi", "radii", rows=rows, cols=cols))
     push!(partials_data, PartialsData("phi", "chord", rows=rows, cols=cols))
     push!(partials_data, PartialsData("phi", "theta", rows=rows, cols=cols))
 
-    ### rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j], wrt_ss=[:i])
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:i])
     push!(partials_data, PartialsData("phi", "v", rows=rows, cols=cols))
     push!(partials_data, PartialsData("phi", "v_pal", rows=rows, cols=cols))
     push!(partials_data, PartialsData("phi", "omega", rows=rows, cols=cols))
     push!(partials_data, PartialsData("phi", "pitch", rows=rows, cols=cols))
 
-    ### rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j], wrt_ss=[:i, :j])
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:i, :j, :l])
     push!(partials_data, PartialsData("phi", "phi", rows=rows, cols=cols))
 
@@ -237,7 +200,6 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     ### push!(partials_data, PartialsData("figure_of_merit", "pitch", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "figure_of_merit", rows=rows, cols=cols, val=-1.0))
 
-    ### rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:i, :j])
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:i, :j, :l])
     push!(partials_data, PartialsData("thrust", "phi", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "phi", rows=rows, cols=cols))
@@ -275,25 +237,6 @@ function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
     v_pal = inputs["v_pal"]
     omega = inputs["omega"]
     pitch = inputs["pitch"]
-
-    #=
-    # -----------------------------
-    #  print inputs 
-    # -----------------------------
-    println("------------------------")
-    println("-- solving BEMT system --")
-    println("chord")
-    println(chord)
-    println("theta")
-    println(theta)
-    println("v")
-    println(v)
-    println("omega")
-    println(omega)
-    println("pitch")
-    println(pitch)
-    # ----------------------------
-    =#
 
     # Unpack the outputs.
     phi = outputs["phi"]
@@ -337,28 +280,8 @@ function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
         ### end
 
         # Get the local inflow angle, the BEMT implicit variable.
-        ### phi[n, :] .= getproperty.(outs, :phi)
-        phi[n, :, :] .= getproperty.(outs, :phi)   # NOTE: seems this is working
+        phi[n, :, :] .= getproperty.(outs, :phi)
     end
-
-    #=
-    # -----------------------------
-    # print outputs
-    # println("------------------------")
-    println("-- solved BEMT system --")
-    println("thrust")
-    println(thrust)
-    println("torque")
-    println(torque)
-    # println("phi")
-    # println(phi)
-    # println("efficiency")
-    # println(efficiency)
-    # println("FM")
-    # println(figure_of_merit)
-    println("------------------------")
-    # ----------------------------
-    =#
 
     return nothing
 end
@@ -467,60 +390,18 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
     omega = inputs["omega"]
     pitch = inputs["pitch"]
 
-    #=
-    # -----------------------------
-    #  print inputs 
-    # -----------------------------
-    println("-----------------------")
-    println("--- in OM.linearlize --")
-    println("num_operating_points")
-    println(num_operating_points)
-    println("num_radial")
-    println(num_radial)
-    # println("chord")
-    # println(chord)
-    # println("theta")
-    # println(theta)
-    # println("v")
-    # println(v)
-    # println("omega")
-    # println(omega)
-    # println("pitch")
-    # println(pitch)
-
-    println("inputs")
-    println(inputs)
-    # println("outputs")
-    # println(outputs)
-    # println("partials")
-    # println(partials)
-    println("-----------------------")
-    # NOTE: inputs, outputs, partials looks ok when called from dymos
-    # ----------------------------
-    =#
-
     # Azimuth discretization
     azangles_aug = range(0, 2 * pi, length=num_azimuth + 1)
     azangles = azangles_aug[1:num_azimuth]  # remove the last point (360 deg)
 
-    ### x_ce = ComponentArray(Rhub=Rhub, Rtip=Rtip, radii=radii, chord=chord, theta=theta, v=v[1], omega=omega[1], pitch=pitch[1])
-    # x_ce = ComponentArray(Rhub=Rhub, Rtip=Rtip, radii=radii, chord=chord, theta=theta, v=v[1], v_pal=v_pal[1], omega=omega[1], pitch=pitch[1])
-
     # Unpack the output.
     phi = outputs["phi"]
-
-    ### y_ce = ComponentArray(phi=phi[1, :])
-    # y_ce = ComponentArray(phi=phi[1, :, :])
 
     # Working arrays and configuration for ForwardDiff's Jacobian routine.
     x = self.x
     y = self.y
     J = self.J
     config = self.forwarddiff_config
-
-    # println("-----------------------")
-    # println(config)
-    # println("-----------------------")
     
     # These need to be transposed because of the differences in array layout
     # between NumPy and Julia. When I declare the partials above, they get set up
@@ -536,18 +417,6 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
     Then, transpose(reshape(A, 4, 2)) =
     1 2 3 4
     5 6 7 8
-    =#
-
-    #= original
-    dphi_dRhub = transpose(reshape(partials["phi", "Rhub"], num_radial, num_operating_points))
-    dphi_dRtip = transpose(reshape(partials["phi", "Rtip"], num_radial, num_operating_points))
-    dphi_dradii = transpose(reshape(partials["phi", "radii"], num_radial, num_operating_points))
-    dphi_dchord = transpose(reshape(partials["phi", "chord"], num_radial, num_operating_points))
-    dphi_dtheta = transpose(reshape(partials["phi", "theta"], num_radial, num_operating_points))
-    dphi_dv = transpose(reshape(partials["phi", "v"], num_radial, num_operating_points))
-    dphi_domega = transpose(reshape(partials["phi", "omega"], num_radial, num_operating_points))
-    dphi_dpitch = transpose(reshape(partials["phi", "pitch"], num_radial, num_operating_points))
-    dphi_dphi = transpose(reshape(partials["phi", "phi"], num_radial, num_operating_points))
     =#
 
     # Note: PermutedDimsArray is similar to permutedims, but it does not copy, like the transpose does not.
@@ -601,21 +470,11 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
     ### dfigure_of_merit_domega = partials["figure_of_merit", "omega"]
     ### dfigure_of_merit_dpitch = partials["figure_of_merit", "pitch"]
 
-    ### dthrust_dphi = transpose(reshape(partials["thrust", "phi"], num_radial, num_operating_points))
-    ### dtorque_dphi = transpose(reshape(partials["torque", "phi"], num_radial, num_operating_points))
-    ### defficiency_dphi = transpose(reshape(partials["efficiency", "phi"], num_radial, num_operating_points))
-    ### dfigure_of_merit_dphi = transpose(reshape(partials["figure_of_merit", "phi"], num_radial, num_operating_points))
+    
     dthrust_dphi = PermutedDimsArray(reshape(partials["thrust", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
     dtorque_dphi = PermutedDimsArray(reshape(partials["torque", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
     defficiency_dphi = PermutedDimsArray(reshape(partials["efficiency", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
-    
-    #= following is just temporary and is not correct
-    dthrust_dphi = reshape(partials["thrust", "phi"], num_operating_points, num_radial, num_azimuth)
-    dtorque_dphi = reshape(partials["torque", "phi"], num_operating_points, num_radial, num_azimuth)
-    defficiency_dphi = reshape(partials["efficiency", "phi"], num_operating_points, num_radial, num_azimuth)
-    =#
-
-    # println("checkpoint 1")
+    ### dfigure_of_merit_dphi = PermutedDimsArray(reshape(partials["figure_of_merit", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
 
     for n in 1:num_operating_points
         # Put the inputs into the input array for ForwardDiff.
@@ -630,92 +489,20 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         x[:omega] = omega[n]
         x[:pitch] = pitch[n]
 
-        # println("checkpoint 2")
-
-        # -----------------------------
-        #  print inputs 
-        # -----------------------------
-        # println("--- In OM.linearize ---")
-        # println("x")
-        # println(x)
-        # ----------------------------
-
         # Get the Jacobian.
         ForwardDiff.jacobian!(J, self.apply_nonlinear_forwarddiffable!, y, x, config)
+        # TODO-FFR: check config file for better performance?
 
-        # println(size(J))
-        # println("checkpoint 3")
-
-        # println("##################################")
-        # println("J")
-        # println(J)
-        # println("##################################")
-        # NOTE-bug: when called from dymos, J is all NaN from iteration 1.
-        # TODO: check config file.
-
-        #=
-        for r in 1:num_radial
-            dphi_dphi[n, r] = J[:phi, :phi][r, r]
-        end
-
-        dphi_dRhub[n, :] .= J[:phi, :Rhub]
-        dphi_dRtip[n, :] .= J[:phi, :Rtip]
-
-        for r in 1:num_radial
-            dphi_dradii[n, r] = J[:phi, :radii][r, r]
-        end
-
-        for r in 1:num_radial
-            dphi_dchord[n, r] = J[:phi, :chord][r, r]
-        end
-
-        for r in 1:num_radial
-            dphi_dtheta[n, r] = J[:phi, :theta][r, r]
-        end
-
-        dphi_dv[n, :] .= J[:phi, :v]
-        dphi_domega[n, :] .= J[:phi, :omega]
-        dphi_dpitch[n, :] .= J[:phi, :pitch]
-        =#
-
-        ### println("dphi_dphi dims")
-        ### println(size(dphi_dphi))
-        ### println("J[:phi, :phi] dims")
-        ### println(size(J[:phi, :phi]))
-        sumsum = 0
+        # TODO: vectorize?
         for r in 1:num_radial
             for k in 1:num_azimuth
                 dphi_dphi[n, r, k] = J[:phi, :phi][r, k, r, k]
                 sumsum += J[:phi, :phi][r, k, r, k]
             end
         end
-        ## println("sparcity sum checker:")
-        ## println(sumsum)
-        ## println(sum(J[:phi, :phi]))
-
-        # println("checkpoint 4")
-        ### println("J[:phi, :Rhub] dims")
-        ### println(size(J[:phi, :Rhub]))
 
         dphi_dRhub[n, :, :] .= J[:phi, :Rhub]
         dphi_dRtip[n, :, :] .= J[:phi, :Rtip]
-
-        # TODO: fix here
-        # println("checkpoint 5")
-        # println("dphi_dchord dims")
-        # println(size(dphi_dchord))
-        ### println("x[:chord] dims")
-        ### println(size(x[:chord]))
-        ### println("x[:phi] dims")
-        ### println(size(x[:phi]))
-
-        ### println("J[:phi, :phi] dims")
-        ### println(size(J[:phi, :phi]))
-        ### println("J[:phi] dims")
-        ### println(size(J[:phi]))
-        # println("J[:phi, :chord] dims")
-        # println(size(J[1:num_radial*num_azimuth, :chord]))
-        # println("checkpoint 5.1")
 
         count = 1
         for k in 1:num_azimuth
@@ -732,16 +519,11 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
             end
         end
 
-        # println("checkpoint 6")
-
         dphi_dv[n, :, :] .= J[:phi, :v]
         dphi_dv_pal[n, :, :] .= J[:phi, :v_pal]
         dphi_domega[n, :, :] .= J[:phi, :omega]
         dphi_dpitch[n, :, :] .= J[:phi, :pitch]
 
-        # println("checkpoint 7")
-
-        ### dthrust_dphi[n, :] .= J[:thrust, :phi]
         dthrust_dphi[n, :, :] .= J[:thrust, :phi]
         dthrust_dRhub[n] = J[:thrust, :Rhub]
         dthrust_dRtip[n] = J[:thrust, :Rtip]
@@ -753,7 +535,6 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         dthrust_domega[n] = J[:thrust, :omega]
         dthrust_dpitch[n] = J[:thrust, :pitch]
 
-        ### dtorque_dphi[n, :] .= J[:torque, :phi]
         dtorque_dphi[n, :, :] .= J[:torque, :phi]
         dtorque_dRhub[n] = J[:torque, :Rhub]
         dtorque_dRtip[n] = J[:torque, :Rtip]
@@ -765,7 +546,6 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         dtorque_domega[n] = J[:torque, :omega]
         dtorque_dpitch[n] = J[:torque, :pitch]
 
-        ### defficiency_dphi[n, :] .= J[:eff, :phi]
         defficiency_dphi[n, :, :] .= J[:eff, :phi]
         defficiency_dRhub[n] = J[:eff, :Rhub]
         defficiency_dRtip[n] = J[:eff, :Rtip]
@@ -778,7 +558,7 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         defficiency_dpitch[n] = J[:eff, :pitch]
 
         #=
-        dfigure_of_merit_dphi[n, :] .= J[:figure_of_merit, :phi]
+        dfigure_of_merit_dphi[n, :, :] .= J[:figure_of_merit, :phi]
         dfigure_of_merit_dRhub[n] = J[:figure_of_merit, :Rhub]
         dfigure_of_merit_dRtip[n] = J[:figure_of_merit, :Rtip]
         dfigure_of_merit_dradii[n, :] .= J[:figure_of_merit, :radii]
@@ -788,8 +568,6 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         dfigure_of_merit_domega[n] = J[:figure_of_merit, :omega]
         dfigure_of_merit_dpitch[n] = J[:figure_of_merit, :pitch]
         =#
-
-        # println("checkpoint 8")
     end
 
     return nothing
