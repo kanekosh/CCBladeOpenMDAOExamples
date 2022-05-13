@@ -493,17 +493,10 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         ForwardDiff.jacobian!(J, self.apply_nonlinear_forwarddiffable!, y, x, config)
         # TODO-FFR: check config file for better performance?
 
-        # TODO: vectorize?
-        for r in 1:num_radial
-            for k in 1:num_azimuth
-                dphi_dphi[n, r, k] = J[:phi, :phi][r, k, r, k]
-                sumsum += J[:phi, :phi][r, k, r, k]
-            end
-        end
-
         dphi_dRhub[n, :, :] .= J[:phi, :Rhub]
         dphi_dRtip[n, :, :] .= J[:phi, :Rtip]
 
+        # TODO: vectorize to accelerate?
         count = 1
         for k in 1:num_azimuth
             for r in 1:num_radial
@@ -515,6 +508,7 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
                 dphi_dradii[n, r, k] = J[1:num_radial*num_azimuth, :radii][count, r]
                 dphi_dchord[n, r, k] = J[1:num_radial*num_azimuth, :chord][count, r]
                 dphi_dtheta[n, r, k] = J[1:num_radial*num_azimuth, :theta][count, r]
+                dphi_dphi[n, r, k] = J[:phi, :phi][r, k, r, k]
                 count = count + 1
             end
         end
