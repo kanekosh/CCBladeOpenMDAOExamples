@@ -62,7 +62,7 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
         # Create the CCBlade operating points.
         Vx = v
         Vrot = omega.*radii   # rotational velocity, length=num_radial
-        Vs = v_pal * cos.(azangles)   # side flow velocity, length=num_azimuth
+        Vs = v_pal * sin.(azangles)   # side flow velocity, length=num_azimuth
         Vy = Vrot .+ Vs'   # 2D matrix, (num_radial, num_azimuth)
         ops = CCBlade.OperatingPoint.(Vx, Vy, rho, pitch, mu, speedofsound)
 
@@ -255,7 +255,7 @@ function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
     # Create the CCBlade sections.
     sections = CCBlade.Section.(radii, chord, theta, Ref(af))
 
-    # Azimuth discretization
+    # Azimuth discretization. If num_azimuth=1, then the effect of sideflow (sin(azimuth)) is 0.
     azangles_aug = range(0, 2 * pi, length=num_azimuth + 1)
     azangles = azangles_aug[1:num_azimuth]  # remove the last point (360 deg)
 
@@ -263,7 +263,7 @@ function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
         # Create the CCBlade operating points.
         Vx = v[n]
         Vrot = omega[n].*radii   # rotational velocity, length=num_radial
-        Vs = v_pal[n] * cos.(azangles)   # side flow velocity, length=num_azimuth
+        Vs = v_pal[n] * sin.(azangles)   # side flow velocity, length=num_azimuth
         Vy = Vrot .+ Vs'   # 2D matrix, (num_radial, num_azimuth)
         ops = CCBlade.OperatingPoint.(Vx, Vy, rho, pitch[n], mu, speedofsound)
 
@@ -336,7 +336,7 @@ function OpenMDAO.apply_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
         # Create the CCBlade operating points.
         Vx = v[n]
         Vrot = omega[n].*radii   # rotational velocity, length=num_radial
-        Vs = v_pal[n] * cos.(azangles)   # side flow velocity, length=num_azimuth
+        Vs = v_pal[n] * sin.(azangles)   # side flow velocity, length=num_azimuth.
         Vy = Vrot .+ Vs'   # 2D matrix, (num_radial, num_azimuth)
         ops = CCBlade.OperatingPoint.(Vx, Vy, rho, pitch[n], mu, speedofsound)
 
