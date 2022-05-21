@@ -26,7 +26,16 @@ end
 
 function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points, num_blades, num_radial, num_azimuth, rho, mu, speedofsound, use_hubtip_losses=true)
     # Get the airfoil polar interpolator and various correction factors.
-    af, mach, reynolds, rotation, tip = get_airfoil(af_fname=af_fname, cr75=cr75, Re_exp=Re_exp)
+    if typeof(af_fname) == String
+        # input: one xfoil data.
+        print("...loading xfoil data ")
+        print(af_fname)
+        println(", will use CCBlade's Reynolds correction")
+        af, mach, reynolds, rotation, tip = get_airfoil(af_fname=af_fname, cr75=cr75, Re_exp=Re_exp)   
+    else
+        # input: multiple xfoil data at various Reynolds number
+        af, mach, reynolds, rotation, tip = get_airfoil_Re_data(af_fnames=af_fname, cr75=cr75)
+    end
 
     if ! use_hubtip_losses
         tip = nothing
