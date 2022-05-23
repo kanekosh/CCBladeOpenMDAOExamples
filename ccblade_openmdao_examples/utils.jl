@@ -10,10 +10,12 @@ function get_airfoil(; af_fname, cr75, Re_exp)
 
     # Reynolds number correction. The 0.6 factor seems to match the NACA 0012
     # drag data from airfoiltools.com.
-    reynolds = CCBlade.SkinFriction(Re, Re_exp)
+    reynolds = CCBlade.SkinFriction(Re, Re_exp)  # this correction is probably not accurate for high angle-of-attack
+    ### reynolds = nothing
 
     # Mach number correction.
-    mach = CCBlade.PrandtlGlauert()
+    ### mach = CCBlade.PrandtlGlauert()
+    mach = nothing
 
     # Rotational stall delay correction. Need some parameters from the CL curve.
     m, alpha0 = CCBlade.linearliftcoeff(af, 1.0, 1.0)  # dummy values for Re and Mach
