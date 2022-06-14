@@ -6,12 +6,19 @@ function get_airfoil(; af_fname, cr75, Re_exp)
 
     # Extend the angle of attack with the Viterna method.
     (alpha, cl, cd) = CCBlade.viterna(alpha, cl, cd, cr75)
-    af = CCBlade.AlphaAF(alpha, cl, cd, info, Re, Mach)
+    ### af = CCBlade.AlphaAF(alpha, cl, cd, info, Re, Mach)
+
+    # smoothing the Viterna extrapolation curve by coarse interpolation
+    alpha2 = Vector(range(-pi, pi, length=50))
+    cl2 = FLOWMath.linear(alpha, cl, alpha2)
+    cd2 = FLOWMath.linear(alpha, cd, alpha2)
+    # return a smoother interpolation model to be used
+    af = CCBlade.AlphaAF(alpha2, cl2, cd2, info, Re, Mach)
 
     # Reynolds number correction. The 0.6 factor seems to match the NACA 0012
     # drag data from airfoiltools.com.
-    reynolds = CCBlade.SkinFriction(Re, Re_exp)  # this correction is probably not accurate for high angle-of-attack
-    ### reynolds = nothing
+    ### reynolds = CCBlade.SkinFriction(Re, Re_exp)  # this correction is probably not accurate for high angle-of-attack
+    reynolds = nothing
 
     # Mach number correction.
     ### mach = CCBlade.PrandtlGlauert()
@@ -20,7 +27,8 @@ function get_airfoil(; af_fname, cr75, Re_exp)
     # Rotational stall delay correction. Need some parameters from the CL curve.
     m, alpha0 = CCBlade.linearliftcoeff(af, 1.0, 1.0)  # dummy values for Re and Mach
     # Create the Du Selig and Eggers correction.
-    rotation = CCBlade.DuSeligEggers(1.0, 1.0, 1.0, m, alpha0)
+    ### rotation = CCBlade.DuSeligEggers(1.0, 1.0, 1.0, m, alpha0)   # NOTE: this doesn't work with optimization...
+    rotation = nothing
 
     # The usual hub and tip loss correction.
     tip = CCBlade.PrandtlTipHub()
@@ -40,10 +48,10 @@ function get_airfoil_Re_data(; af_fnames, cr75)
     num_Re = length(af_fnames)
 
     # prepare data array
-    alpha_all = Vector(range(-pi, pi, length=200))
+    alpha_all = Vector(range(-pi, pi, length=50))   # coarse alpha discretization for smoothing
     Re_all = zeros(num_Re + 2)
-    cl_all = zeros(200, num_Re + 2)   # Repeat the data for min and max Reynolds number for "extrapolation"
-    cd_all = zeros(200, num_Re + 2)
+    cl_all = zeros(50, num_Re + 2)   # Repeat the data for min and max Reynolds number for "extrapolation"
+    cd_all = zeros(50, num_Re + 2)
 
     for i in 1:num_Re
         # load data
@@ -70,7 +78,6 @@ function get_airfoil_Re_data(; af_fnames, cr75)
     cl_all[:, num_Re + 2] = cl_all[:, num_Re + 1] * 1.01
     cd_all[:, num_Re + 2] = cd_all[:, num_Re + 1] * 1.01
 
-    ### Re_all = [1.0, 50000.0, 100000.0, 200000.0, 500000.0, 1000000.0, 100000000.0]   # overwrite for debug !
     print("...loading xfoil data at Re = ")
     println(Re_all')
 
@@ -84,7 +91,8 @@ function get_airfoil_Re_data(; af_fnames, cr75)
     # Rotational stall delay correction. Need some parameters from the CL curve.
     m, alpha0 = CCBlade.linearliftcoeff(af, 1.0, 1.0)  # dummy values for Re and Mach
     # Create the Du Selig and Eggers correction.
-    rotation = CCBlade.DuSeligEggers(1.0, 1.0, 1.0, m, alpha0)
+    ### rotation = CCBlade.DuSeligEggers(1.0, 1.0, 1.0, m, alpha0)   # NOTE: this doesn't work with optimization...
+    rotation = nothing
 
     # The usual hub and tip loss correction.
     tip = CCBlade.PrandtlTipHub()

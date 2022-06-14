@@ -29,8 +29,7 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
     if typeof(af_fname) == String
         # input: one xfoil data.
         print("...loading xfoil data ")
-        print(af_fname)
-        println(", will use CCBlade's Reynolds correction")
+        println(af_fname)
         af, mach, reynolds, rotation, tip = get_airfoil(af_fname=af_fname, cr75=cr75, Re_exp=Re_exp)   
     else
         # input: multiple xfoil data at various Reynolds number
@@ -40,6 +39,17 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
     if ! use_hubtip_losses
         tip = nothing
     end
+
+    # print corrections
+    println("--- airfoil corrections ---")
+    print("Mach: ")
+    print(mach)
+    print(", Reynolds: ")
+    print(reynolds)
+    print(", Rotation: ")
+    print(rotation)
+    print(", Tip: ")
+    println(tip)
 
     function apply_nonlinear_forwarddiffable!(y, x)
         T = eltype(x)
