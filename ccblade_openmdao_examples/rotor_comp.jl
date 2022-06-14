@@ -92,7 +92,8 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
 
         # Get the thrust and torque, then the efficiency, etc.
         # coefficients.
-        thrust, torque = CCBlade.thrusttorque(rotor, sections, outs)
+        thrust, torque, drag = CCBlade.thrusttorquedrag(rotor, sections, azangles, outs)
+        # NOTE: "drag" is the in-plane force in skewed-flow direction, thus "drag" of the rotor as an lifting surface.
         eff, CT, CQ = CCBlade.nondim(thrust, torque, Vx, omega, rho, rotor, "propeller")
         ### if thrust > zero(T)
         ###     figure_of_merit, CT, CP = CCBlade.nondim(thrust, torque, Vx, omega, rho, rotor, "helicopter")
@@ -103,6 +104,7 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
         # Put the outputs in the output array.
         y[:phi] .= Rs
         y[:thrust] = thrust
+        y[:drag] = drag
         y[:torque] = torque
         y[:eff] = eff
         ### y[:figure_of_merit] = figure_of_merit
@@ -115,7 +117,7 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
         phi=zeros(Float64, (num_radial, num_azimuth)), Rhub=0.0, Rtip=0.0, radii=zeros(Float64, num_radial), chord=zeros(Float64, num_radial),
         theta=zeros(Float64, num_radial), v=0.0, v_pal=0.0, omega=0.0, pitch=0.0)
     Y = ComponentArray(
-        phi=zeros(Float64, (num_radial, num_azimuth)), thrust=0.0, torque=0.0, eff=0.0)   # to compute figure_of_merit, must add it here.
+        phi=zeros(Float64, (num_radial, num_azimuth)), thrust=0.0, drag=0.0, torque=0.0, eff=0.0)   # to compute figure_of_merit, must add it here.
     J = Y.*X'
 
     # Get the JacobianConfig object, which we'll reuse each time when calling
@@ -147,6 +149,7 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     output_data = Vector{VarData}()
     push!(output_data, VarData("phi", shape=(num_operating_points, num_radial, num_azimuth), val=1.0, units="rad"))   # [i, j, l]
     push!(output_data, VarData("thrust", shape=num_operating_points, val=1.0, units="N"))
+    push!(output_data, VarData("drag", shape=num_operating_points, val=0.0, units="N"))
     push!(output_data, VarData("torque", shape=num_operating_points, val=1.0, units="N*m"))
     push!(output_data, VarData("efficiency", shape=num_operating_points, val=1.0))
     ### push!(output_data, VarData("figure_of_merit", shape=num_operating_points, val=1.0))
@@ -176,6 +179,8 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:k])
     push!(partials_data, PartialsData("thrust", "Rhub", rows=rows, cols=cols))
     push!(partials_data, PartialsData("thrust", "Rtip", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "Rhub", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "Rtip", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "Rhub", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "Rtip", rows=rows, cols=cols))
     push!(partials_data, PartialsData("efficiency", "Rhub", rows=rows, cols=cols))
@@ -187,6 +192,9 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     push!(partials_data, PartialsData("thrust", "radii", rows=rows, cols=cols))
     push!(partials_data, PartialsData("thrust", "chord", rows=rows, cols=cols))
     push!(partials_data, PartialsData("thrust", "theta", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "radii", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "chord", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "theta", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "radii", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "chord", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "theta", rows=rows, cols=cols))
@@ -203,6 +211,11 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     push!(partials_data, PartialsData("thrust", "omega", rows=rows, cols=cols))
     push!(partials_data, PartialsData("thrust", "pitch", rows=rows, cols=cols))
     push!(partials_data, PartialsData("thrust", "thrust", rows=rows, cols=cols, val=-1.0))
+    push!(partials_data, PartialsData("drag", "v", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "v_pal", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "omega", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "pitch", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "drag", rows=rows, cols=cols, val=-1.0))
     push!(partials_data, PartialsData("torque", "v", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "v_pal", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "omega", rows=rows, cols=cols))
@@ -221,6 +234,7 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:i, :j, :l])
     push!(partials_data, PartialsData("thrust", "phi", rows=rows, cols=cols))
+    push!(partials_data, PartialsData("drag", "phi", rows=rows, cols=cols))
     push!(partials_data, PartialsData("torque", "phi", rows=rows, cols=cols))
     push!(partials_data, PartialsData("efficiency", "phi", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "phi", rows=rows, cols=cols))
@@ -260,6 +274,7 @@ function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
     # Unpack the outputs.
     phi = outputs["phi"]
     thrust = outputs["thrust"]
+    drag = outputs["drag"]
     torque = outputs["torque"]
     efficiency = outputs["efficiency"]
     ### figure_of_merit = outputs["figure_of_merit"]
@@ -290,7 +305,7 @@ function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
         outs = CCBlade.solve.(Ref(rotor), sections, ops)
 
         # Get the thrust, torque, and efficiency.
-        thrust[n], torque[n] = CCBlade.thrusttorque(rotor, sections, outs)
+        thrust[n], torque[n], drag[n] = CCBlade.thrusttorquedrag(rotor, sections, azangles, outs)
         efficiency[n], CT, CQ = CCBlade.nondim(thrust[n], torque[n], Vx, omega[n], rho, rotor, "propeller")
         ### if thrust[n] > zero(T)
         ###     figure_of_merit[n], CT, CP = CCBlade.nondim(thrust[n], torque[n], Vx, omega[n], rho, rotor, "helicopter")
@@ -372,7 +387,7 @@ function OpenMDAO.apply_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
         # Get the thrust, torque, and efficiency.
         outs = getindex.(Rs_and_outs, 2)
 
-        thrust, torque = CCBlade.thrusttorque(rotor, sections, outs)
+        thrust, torque, drag = CCBlade.thrusttorquedrag(rotor, sections, azangles, outs)
         efficiency, CT, CQ = CCBlade.nondim(thrust, torque, Vx, omega[n], rho, rotor, "propeller")
         ### if thrust > zero(T)
         ###     figure_of_merit, CT, CP = CCBlade.nondim(thrust, torque, Vx, omega[n], rho, rotor, "helicopter")
@@ -382,6 +397,7 @@ function OpenMDAO.apply_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, output
 
         # Set the residuals of the thrust, torque, and efficiency.
         residuals["thrust"][n] = thrust - outputs["thrust"][n]
+        residuals["drag"][n] = drag - outputs["drag"][n]
         residuals["torque"][n] = torque - outputs["torque"][n]
         residuals["efficiency"][n] = efficiency - outputs["efficiency"][n]
         ### residuals["figure_of_merit"][n] = figure_of_merit - outputs["figure_of_merit"][n]
@@ -453,6 +469,8 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
 
     dthrust_dRhub = partials["thrust", "Rhub"]
     dthrust_dRtip = partials["thrust", "Rtip"]
+    ddrag_dRhub = partials["drag", "Rhub"]
+    ddrag_dRtip = partials["drag", "Rtip"]
     dtorque_dRhub = partials["torque", "Rhub"]
     dtorque_dRtip = partials["torque", "Rtip"]
     defficiency_dRhub = partials["efficiency", "Rhub"]
@@ -463,6 +481,9 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
     dthrust_dradii = transpose(reshape(partials["thrust", "radii"], num_radial, num_operating_points))
     dthrust_dchord = transpose(reshape(partials["thrust", "chord"], num_radial, num_operating_points))
     dthrust_dtheta = transpose(reshape(partials["thrust", "theta"], num_radial, num_operating_points))
+    ddrag_dradii = transpose(reshape(partials["drag", "radii"], num_radial, num_operating_points))
+    ddrag_dchord = transpose(reshape(partials["drag", "chord"], num_radial, num_operating_points))
+    ddrag_dtheta = transpose(reshape(partials["drag", "theta"], num_radial, num_operating_points))
     dtorque_dradii = transpose(reshape(partials["torque", "radii"], num_radial, num_operating_points))
     dtorque_dchord = transpose(reshape(partials["torque", "chord"], num_radial, num_operating_points))
     dtorque_dtheta = transpose(reshape(partials["torque", "theta"], num_radial, num_operating_points))
@@ -477,6 +498,10 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
     dthrust_dv_pal = partials["thrust", "v_pal"]
     dthrust_domega = partials["thrust", "omega"]
     dthrust_dpitch = partials["thrust", "pitch"]
+    ddrag_dv = partials["drag", "v"]
+    ddrag_dv_pal = partials["drag", "v_pal"]
+    ddrag_domega = partials["drag", "omega"]
+    ddrag_dpitch = partials["drag", "pitch"]
     dtorque_dv = partials["torque", "v"]
     dtorque_dv_pal = partials["torque", "v_pal"]
     dtorque_domega = partials["torque", "omega"]
@@ -491,6 +516,7 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
 
     
     dthrust_dphi = PermutedDimsArray(reshape(partials["thrust", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
+    ddrag_dphi = PermutedDimsArray(reshape(partials["drag", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
     dtorque_dphi = PermutedDimsArray(reshape(partials["torque", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
     defficiency_dphi = PermutedDimsArray(reshape(partials["efficiency", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
     ### dfigure_of_merit_dphi = PermutedDimsArray(reshape(partials["figure_of_merit", "phi"], num_azimuth, num_radial, num_operating_points), (3, 2, 1))
@@ -547,6 +573,17 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
         dthrust_dv_pal[n] = J[:thrust, :v_pal]
         dthrust_domega[n] = J[:thrust, :omega]
         dthrust_dpitch[n] = J[:thrust, :pitch]
+
+        ddrag_dphi[n, :, :] .= J[:drag, :phi]
+        ddrag_dRhub[n] = J[:drag, :Rhub]
+        ddrag_dRtip[n] = J[:drag, :Rtip]
+        ddrag_dradii[n, :] .= J[:drag, :radii]
+        ddrag_dchord[n, :] .= J[:drag, :chord]
+        ddrag_dtheta[n, :] .= J[:drag, :theta]
+        ddrag_dv[n] = J[:drag, :v]
+        ddrag_dv_pal[n] = J[:drag, :v_pal]
+        ddrag_domega[n] = J[:drag, :omega]
+        ddrag_dpitch[n] = J[:drag, :pitch]
 
         dtorque_dphi[n, :, :] .= J[:torque, :phi]
         dtorque_dRhub[n] = J[:torque, :Rhub]
