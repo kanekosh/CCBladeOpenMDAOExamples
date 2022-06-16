@@ -1,5 +1,6 @@
 using Pkg
-Pkg.develop(PackageSpec(path="/home/shugo/packages/CCBlade.jl"))   # developer install of the local package.
+### Pkg.develop(PackageSpec(path="/home/shugo/packages/CCBlade.jl"))   # developer install of the local package.
+# easiler to dev install in julia prompt
 Pkg.add("ConcreteStructs")
 Pkg.add("ForwardDiff")
 # OpenMDAO.jl isn't a Registered Julia Package®™©, so need to specify the url.
