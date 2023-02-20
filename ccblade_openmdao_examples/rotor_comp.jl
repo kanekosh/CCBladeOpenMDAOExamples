@@ -4,7 +4,7 @@
 # task for 5/11
 # TODO: clean and remove unnecessary comments
 
-@concrete struct BEMTRotorCACompSideFlow <: AbstractImplicitComp
+@concrete struct BEMTRotorCACompSideFlow <: OpenMDAOCore.AbstractImplicitComp
     num_operating_points
     num_blades
     num_radial
@@ -128,104 +128,104 @@ function BEMTRotorCACompSideFlow(; af_fname, cr75, Re_exp, num_operating_points,
 end
 
 #' Need a setup function, just like a Python OpenMDAO `Component`.
-function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
+function OpenMDAOCore.setup(self::BEMTRotorCACompSideFlow)
     num_operating_points = self.num_operating_points
     num_radial = self.num_radial
     num_azimuth = self.num_azimuth
 
     # Declare the OpenMDAO inputs.
-    input_data = Vector{VarData}()
-    push!(input_data, VarData("Rhub", shape=1, val=0.1, units="m"))
-    push!(input_data, VarData("Rtip", shape=1, val=2.0, units="m"))
-    push!(input_data, VarData("radii", shape=num_radial, val=1., units="m"))
-    push!(input_data, VarData("chord", shape=num_radial, val=1., units="m"))
-    push!(input_data, VarData("theta", shape=num_radial, val=1., units="rad"))
-    push!(input_data, VarData("v", shape=num_operating_points, val=1., units="m/s"))   # normal to disk
-    push!(input_data, VarData("v_pal", shape=num_operating_points, val=0., units="m/s"))   # parallel to disk
-    push!(input_data, VarData("omega", shape=num_operating_points, val=1., units="rad/s"))
-    push!(input_data, VarData("pitch", shape=num_operating_points, val=0., units="rad"))
+    input_data = Vector{OpenMDAOCore.VarData}()
+    push!(input_data, OpenMDAOCore.VarData("Rhub", shape=1, val=0.1, units="m"))
+    push!(input_data, OpenMDAOCore.VarData("Rtip", shape=1, val=2.0, units="m"))
+    push!(input_data, OpenMDAOCore.VarData("radii", shape=num_radial, val=1., units="m"))
+    push!(input_data, OpenMDAOCore.VarData("chord", shape=num_radial, val=1., units="m"))
+    push!(input_data, OpenMDAOCore.VarData("theta", shape=num_radial, val=1., units="rad"))
+    push!(input_data, OpenMDAOCore.VarData("v", shape=num_operating_points, val=1., units="m/s"))   # normal to disk
+    push!(input_data, OpenMDAOCore.VarData("v_pal", shape=num_operating_points, val=0., units="m/s"))   # parallel to disk
+    push!(input_data, OpenMDAOCore.VarData("omega", shape=num_operating_points, val=1., units="rad/s"))
+    push!(input_data, OpenMDAOCore.VarData("pitch", shape=num_operating_points, val=0., units="rad"))
 
     # Declare the OpenMDAO outputs.
-    output_data = Vector{VarData}()
-    push!(output_data, VarData("phi", shape=(num_operating_points, num_radial, num_azimuth), val=1.0, units="rad"))   # [i, j, l]
-    push!(output_data, VarData("thrust", shape=num_operating_points, val=1.0, units="N"))
-    push!(output_data, VarData("drag", shape=num_operating_points, val=0.0, units="N"))
-    push!(output_data, VarData("torque", shape=num_operating_points, val=1.0, units="N*m"))
-    push!(output_data, VarData("efficiency", shape=num_operating_points, val=1.0))
+    output_data = Vector{OpenMDAOCore.VarData}()
+    push!(output_data, OpenMDAOCore.VarData("phi", shape=(num_operating_points, num_radial, num_azimuth), val=1.0, units="rad"))   # [i, j, l]
+    push!(output_data, OpenMDAOCore.VarData("thrust", shape=num_operating_points, val=1.0, units="N"))
+    push!(output_data, OpenMDAOCore.VarData("drag", shape=num_operating_points, val=0.0, units="N"))
+    push!(output_data, OpenMDAOCore.VarData("torque", shape=num_operating_points, val=1.0, units="N*m"))
+    push!(output_data, OpenMDAOCore.VarData("efficiency", shape=num_operating_points, val=1.0))
     ### push!(output_data, VarData("figure_of_merit", shape=num_operating_points, val=1.0))
 
     # Declare the OpenMDAO partial derivatives.
     ss_sizes = Dict(:i=>num_operating_points, :j=>num_radial, :k=>1, :l=>num_azimuth)
-    partials_data = Vector{PartialsData}()
+    partials_data = Vector{OpenMDAOCore.PartialsData}()
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:k])
-    push!(partials_data, PartialsData("phi", "Rhub", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("phi", "Rtip", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "Rhub", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "Rtip", rows=rows, cols=cols))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:j])
-    push!(partials_data, PartialsData("phi", "radii", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("phi", "chord", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("phi", "theta", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "radii", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "chord", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "theta", rows=rows, cols=cols))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:i])
-    push!(partials_data, PartialsData("phi", "v", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("phi", "v_pal", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("phi", "omega", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("phi", "pitch", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "v", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "v_pal", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "omega", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "pitch", rows=rows, cols=cols))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i, :j, :l], wrt_ss=[:i, :j, :l])
-    push!(partials_data, PartialsData("phi", "phi", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("phi", "phi", rows=rows, cols=cols))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:k])
-    push!(partials_data, PartialsData("thrust", "Rhub", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "Rtip", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "Rhub", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "Rtip", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "Rhub", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "Rtip", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "Rhub", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "Rtip", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "Rhub", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "Rtip", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "Rhub", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "Rtip", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "Rhub", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "Rtip", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "Rhub", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "Rtip", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "Rhub", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "Rtip", rows=rows, cols=cols))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:j])
-    push!(partials_data, PartialsData("thrust", "radii", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "chord", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "theta", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "radii", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "chord", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "theta", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "radii", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "chord", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "theta", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "radii", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "chord", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "theta", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "radii", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "chord", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "theta", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "radii", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "chord", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "theta", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "radii", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "chord", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "theta", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "radii", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "chord", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "theta", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "radii", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "chord", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "theta", rows=rows, cols=cols))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:i])
-    push!(partials_data, PartialsData("thrust", "v", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "v_pal", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "omega", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "pitch", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("thrust", "thrust", rows=rows, cols=cols, val=-1.0))
-    push!(partials_data, PartialsData("drag", "v", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "v_pal", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "omega", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "pitch", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "drag", rows=rows, cols=cols, val=-1.0))
-    push!(partials_data, PartialsData("torque", "v", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "v_pal", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "omega", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "pitch", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "torque", rows=rows, cols=cols, val=-1.0))
-    push!(partials_data, PartialsData("efficiency", "v", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "v_pal", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "omega", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "pitch", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "efficiency", rows=rows, cols=cols, val=-1.0))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "v", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "v_pal", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "omega", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "pitch", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "thrust", rows=rows, cols=cols, val=-1.0))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "v", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "v_pal", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "omega", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "pitch", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "drag", rows=rows, cols=cols, val=-1.0))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "v", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "v_pal", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "omega", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "pitch", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "torque", rows=rows, cols=cols, val=-1.0))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "v", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "v_pal", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "omega", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "pitch", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "efficiency", rows=rows, cols=cols, val=-1.0))
     ### push!(partials_data, PartialsData("figure_of_merit", "v", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "v_pal", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "omega", rows=rows, cols=cols))
@@ -233,10 +233,10 @@ function OpenMDAO.setup(self::BEMTRotorCACompSideFlow)
     ### push!(partials_data, PartialsData("figure_of_merit", "figure_of_merit", rows=rows, cols=cols, val=-1.0))
 
     rows, cols = get_rows_cols(ss_sizes=ss_sizes, of_ss=[:i], wrt_ss=[:i, :j, :l])
-    push!(partials_data, PartialsData("thrust", "phi", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("drag", "phi", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("torque", "phi", rows=rows, cols=cols))
-    push!(partials_data, PartialsData("efficiency", "phi", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("thrust", "phi", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("drag", "phi", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("torque", "phi", rows=rows, cols=cols))
+    push!(partials_data, OpenMDAOCore.PartialsData("efficiency", "phi", rows=rows, cols=cols))
     ### push!(partials_data, PartialsData("figure_of_merit", "phi", rows=rows, cols=cols))
 
     return input_data, output_data, partials_data
@@ -244,7 +244,7 @@ end
 
 # We'll define a `solve_nonlinear` function, since CCBlade.jl knows how to
 # converge it's own residual.
-function OpenMDAO.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, outputs)
+function OpenMDAOCore.solve_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, outputs)
     # Unpack all the options.
     num_operating_points = self.num_operating_points
     num_blades = self.num_blades
@@ -325,7 +325,7 @@ end
 #' OpenMDAO. But I think the `apply_nonlinear` will be handy for checking the
 #' the partial derivatives of the `BEMTRotorCAComp` `Component`.
 #+ results="hidden"
-function OpenMDAO.apply_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, outputs, residuals)
+function OpenMDAOCore.apply_nonlinear!(self::BEMTRotorCACompSideFlow, inputs, outputs, residuals)
     # Unpack all the options.
     num_operating_points = self.num_operating_points
     num_blades = self.num_blades
@@ -408,7 +408,7 @@ end
 # Now for the big one: the `linearize!` function will calculate the derivatives
 # of the BEMT component residuals wrt the inputs and outputs. We'll use the
 # Julia package ForwardDiff.jl to actually calculate the derivatives.
-function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, partials)
+function OpenMDAOCore.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, partials)
     # Unpack the options we'll need.
     num_operating_points = self.num_operating_points
     num_radial = self.num_radial
@@ -624,5 +624,5 @@ function OpenMDAO.linearize!(self::BEMTRotorCACompSideFlow, inputs, outputs, par
 end
 
 # Disable checking for guess_nonlinear and apply_nonlinear functions.
-OpenMDAO.detect_guess_nonlinear(::Type{<:BEMTRotorCACompSideFlow}) = false
-OpenMDAO.detect_apply_linear(::Type{<:BEMTRotorCACompSideFlow}) = false
+# OpenMDAOCore.detect_guess_nonlinear(::Type{<:BEMTRotorCACompSideFlow}) = false
+# OpenMDAOCore.detect_apply_linear(::Type{<:BEMTRotorCACompSideFlow}) = false

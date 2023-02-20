@@ -2,7 +2,7 @@ using CCBlade
 using ComponentArrays
 using ConcreteStructs
 using ForwardDiff
-using OpenMDAO
+using OpenMDAOCore: OpenMDAOCore
 import FLOWMath
 
 include("utils.jl")
