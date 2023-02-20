@@ -97,7 +97,10 @@ def get_problem():
 
 if __name__ == "__main__":
     p = get_problem()
-    p.run_driver()
+    # p.run_driver()
+    # om.n2(p)
+    p.run_model()
+    p.check_partials(compact_print=True)
 
     radii_cp = p.get_val("radii_cp", units="inch")
     radii = p.get_val("radii", units="inch")
@@ -106,6 +109,25 @@ if __name__ == "__main__":
     theta_cp = p.get_val("theta_cp", units="deg")
     theta = p.get_val("theta", units="deg")
 
+    thrust = p.get_val('thrust', units='N')
+    torque = p.get_val('torque', units='N*m')
+    eff = p.get_val('efficiency')
+    print('thrust:', thrust)
+    print('torque:', torque)
+    print('efficiency:', eff)
+    print('chord_cp:', chord_cp)
+    print('theta_cp:', theta_cp)
+
+    """
+    Outputs:
+    thrust: [97.24599999]
+    torque: [6.00942664]
+    efficiency: [0.80339373]
+    chord_cp: [1.         1.62105406 1.43080033 1.17892194 1.         1.      1.         1.        ]
+    theta_cp: [49.82401853 36.42530345 28.44861721 22.58106527 18.89948765 15.94281525 13.52234116 10.94555627]
+    """
+
+    """
     cmap = plt.get_cmap("tab10")
     fig, (ax0, ax1) = plt.subplots(nrows=2, sharex=True)
     ax0.plot(radii_cp, chord_cp, color=cmap(0), marker="o")
@@ -114,3 +136,4 @@ if __name__ == "__main__":
     ax1.plot(radii_cp, theta_cp, color=cmap(0), marker="o")
     ax1.plot(radii, theta, color=cmap(0))
     fig.savefig("chord_theta.png")
+    """

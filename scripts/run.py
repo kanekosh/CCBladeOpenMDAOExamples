@@ -99,6 +99,8 @@ if __name__ == "__main__":
     p = get_problem()
     p.run_driver()
 
+    om.n2(p, show_browser=False)
+
     radii_cp = p.get_val("radii_cp", units="inch")
     radii = p.get_val("radii", units="inch")
     chord_cp = p.get_val("chord_cp", units="inch")
