@@ -1,10 +1,8 @@
 import os
 
-from julia import Main
+# Create a new Julia module that will hold all the Julia code imported into this Python module.
+import juliacall
+juliamodule = juliacall.newmodule("RotorAnalysis")
 
-# All this is stolen from SciML/diffeqpy. I think after doing this, a user
-# should have access to BEMTRotorComp.
 script_dir = os.path.dirname(os.path.realpath(__file__))
-Main.include(os.path.join(script_dir, "ccblade_openmdao_component.jl"))
-BEMTRotorComp = Main.BEMTRotorComp
-BEMTRotorCAComp = Main.BEMTRotorCAComp
+juliamodule.include(os.path.join(script_dir, "ccblade_openmdao_component.jl"))
